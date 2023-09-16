@@ -24,7 +24,7 @@ def test_diabetes_reader():
 
     # Act
     dataset = reader.read(dataset_path, detect_encoding=True)
-
+    
     # Assert
     assert dataset != None
 

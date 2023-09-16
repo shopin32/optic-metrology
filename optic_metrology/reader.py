@@ -35,6 +35,10 @@ class InmemoryDataSet(object):
         return self._metainfo.names
     
     @property
+    def metainfo(self):
+        return self._metainfo
+    
+    @property
     def data_types(self):
         return self._metainfo.types
     
@@ -71,6 +75,9 @@ class InmemoryDataSet(object):
         if not feature_names:
             feature_names = [f for f in self._df.columns if f != target_name]
         return self._df[feature_names]
+    
+    def get_column(self, name: str) -> pd.Series:
+        return self._df[name]
         
         
 class   DataSetReader(object):

@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
 from optic_metrology.feature import FeatureType
+from optic_metrology.meta_info import ModelMetaInfo
+from optic_metrology.model import Model
 
 from optic_metrology.reader import DataSetReader, InmemoryDataSet
 from sklearn import metrics, preprocessing, linear_model
@@ -34,12 +36,24 @@ def train(training_data_path: str, target_name: str, random_state: Optional[int]
             best_metric = metric
     return best_model
 
+
+def train_single(training_data_path: str, target_name: str, model_meta_info: ModelMetaInfo, random_state: Optional[int] = None):
+    reader = DataSetReader()
+    dataset = reader.read(training_data_path)
+    model = Model(model_meta_info, dataset.metainfo, target_name)
+    X_train, X_test, y_train, y_test = dataset.sample(target_name, random_state=0)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    metric = metrics.accuracy_score(preds, y_test)
+    return model, metric
+
+
 def get_models(dataset: InmemoryDataSet, class_labels: Optional[np.ndarray] = None, random_state: Optional[int] = None):
     if class_labels is None:
         # regression todo
         return []
     return [
-        XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=random_state),
+        XGBClassifier(),
         lgb.LGBMClassifier(num_class=len(class_labels), random_state=random_state),
         linear_model.SGDClassifier(random_state=random_state),
     ]
