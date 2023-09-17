@@ -1,7 +1,9 @@
+import json
 from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
+from scipy.sparse import issparse, hstack
 from optic_metrology.feature import FeatureType, FeaturesMetainfo
 from optic_metrology.meta_info import ModelMetaInfo, VertexMetaInfo
 from optic_metrology.utils import get_class
@@ -93,5 +95,11 @@ class Model(object):
         return X[features_to_select]
     
     def _stack(self, data: Dict[str, np.ndarray], parents: List[str]):
-        return np.concatenate([data[p] for p in parents], axis=1)
+        is_sparse = [issparse(data[p]) for p in parents]
+        if np.any(is_sparse):
+            return hstack([data[p] for p in parents])
+        return np.hstack([data[p] for p in parents])
 
+    def __repr__(self) -> str:
+        return json.dumps(self._model_meta_info.to_dict(), indent=4)
+        

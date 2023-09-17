@@ -97,7 +97,7 @@ class ModelMetaInfo(object):
     def to_dict(self):
         return {
             'vertices': [v.to_dict() for v in self.vertices],
-            'sources': {uid: ftype.name for uid, ftype in self.root_sources.items()}
+            'sources': {uid: [ft.name for ft in ftypes] for uid, ftypes in self.roots_sources.items()}
         }
     
     @classmethod

@@ -20,6 +20,20 @@ def test_train_with_model_generation():
     assert abs(models[0][1] - 0.933333) < 0.00001 
 
 
+def test_readmitted():
+    # arrange
+    dataset_path = get_test_file('diabetes.csv')
+    target_name = 'readmitted'
+
+    # Act
+    models = train(dataset_path, target_name, random_state=123422)
+
+    # Assert
+    assert models is not None
+    assert len(models) == 28
+    assert abs(models[0][1] - 0.56462) < 0.00001
+
+
 def test_train_single_model():
     # arrange
     dataset_path = get_test_file('iris_fisher.xlsx')

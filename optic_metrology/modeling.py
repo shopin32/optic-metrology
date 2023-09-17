@@ -1,3 +1,4 @@
+import logging
 import sys
 from typing import Iterable, List, Optional
 import lightgbm as lgb
@@ -31,7 +32,9 @@ CLASSIFICATION_ESTIMATORS = [
     },
     {
         'clazz': 'lightgbm.LGBMClassifier',
-        'hyper_parameters': {},
+        'hyper_parameters': {
+            'verbose': -1,
+        },
         'method': 'predict',
     },
     {
@@ -75,7 +78,10 @@ NUMERIC_IMPUTATIONS  = [
 CATEGORICAL_ENCODERS = [
     {
         'clazz': 'sklearn.preprocessing.OrdinalEncoder',
-        'hyper_parameters': {},
+        'hyper_parameters': {
+            'handle_unknown': 'use_encoded_value',
+            'unknown_value': -9999,
+        },
         'method': 'transform',
     },
     {
@@ -86,6 +92,8 @@ CATEGORICAL_ENCODERS = [
         'method': 'transform',
     },
 ]
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ModelGenerator(object):
@@ -115,8 +123,8 @@ class ModelGenerator(object):
             est_dict = dict(est_dict)
             est_dict['name'] = 'Vertex_{}'.format(len(preprocessing_steps))
             est_dict['uid'] = '{}'.format(len(preprocessing_steps))
-            est_vertex = VertexMetaInfo.from_dict(est_dict)
             for preprocessing_comb in preprocessing_combs:
+                est_vertex = VertexMetaInfo.from_dict(est_dict)
                 model = ModelMetaInfo()
                 for i in range(len(preprocessing_comb)):
                     sources = [types[i]]
@@ -146,10 +154,12 @@ def train(training_data_path: str, target_name: str, random_state: Optional[int]
     features_info = dataset.metainfo.subset([target_name], include=False)
     model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
     models_infos = model_generator.generate(features_info, model_type)
+    LOGGER.info("Models to train: [%s]", len(models_infos))
     results = []
     for model_meta_info in models_infos:
         model, metric = train_single(dataset, target_name, model_meta_info, random_state)
         results.append((model, metric))
+        LOGGER.info("Progress: %s/%s",len(results), len(models_infos))
     results = sorted(results, key=lambda x: x[1], reverse=True)
     return results
 
@@ -164,5 +174,8 @@ def train_single(dataset: InmemoryDataSet, target_name: str, model_meta_info: Mo
 
 
 if __name__ == '__main__':
-    train(sys.argv[1], sys.argv[2], random_state=123422)
+    models = train('/home/petro/Downloads/iris_fisher.xlsx', 'Вид ірису', random_state=123422)
+    for model, metric in models:
+        print(model)
+        print(metric)
 

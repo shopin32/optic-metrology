@@ -102,6 +102,7 @@ class   DataSetReader(object):
                 ftype = FeatureType.NUMERIC
             else:
                 ftype = FeatureType.CATEGORICAL
+                df[col] = df[col].fillna('')
             metainfo.add(col, ftype)
         return InmemoryDataSet(
             dataset_path, extension, df, metainfo, encoding=encoding
