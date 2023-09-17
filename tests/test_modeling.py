@@ -6,19 +6,21 @@ from tests.utils import get_test_file
 from optic_metrology.modeling import train, train_single
 
 
-def test_iris():
+def test_train_with_model_generation():
     # arrange
     dataset_path = get_test_file('iris_fisher.xlsx')
     target_name = 'Вид ірису'
 
     # Act
-    model = train(dataset_path, target_name, random_state=123422)
+    models = train(dataset_path, target_name, random_state=123422)
 
     # Assert
-    assert isinstance(model, linear_model.SGDClassifier)
+    assert models is not None
+    assert len(models) == 14
+    assert abs(models[0][1] - 0.933333) < 0.00001 
 
 
-def test_meta_info():
+def test_train_single_model():
     # arrange
     dataset_path = get_test_file('iris_fisher.xlsx')
     reader = DataSetReader()
@@ -55,7 +57,8 @@ def test_meta_info():
 
     # Act
     dataset = reader.read(dataset_path)
-    model, _ = train_single(dataset_path, target_name, model, 123)
-    result = model.predict(dataset.get_df())
+    model, _ = train_single(dataset, target_name, model, 123)
+    result = model.predict(dataset.get_df(), show_probs=True)
 
-    print()
+    # Assert
+    assert result.shape[1] == 3

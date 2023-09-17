@@ -1,62 +1,166 @@
 import sys
-from typing import List, Optional
+from typing import Iterable, List, Optional
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from xgboost import XGBClassifier
-from optic_metrology.feature import FeatureType
-from optic_metrology.meta_info import ModelMetaInfo
+from optic_metrology.feature import FeatureType, FeaturesMetainfo
+from optic_metrology.meta_info import ModelMetaInfo, ModelType, VertexMetaInfo
 from optic_metrology.model import Model
 
 from optic_metrology.reader import DataSetReader, InmemoryDataSet
-from sklearn import metrics, preprocessing, linear_model
+from sklearn import metrics
+
+CLASSIFICATION_ESTIMATORS = [
+    {
+        'clazz': 'sklearn.linear_model.SGDClassifier',
+        'hyper_parameters': {},
+        'method': 'predict',
+    },
+    {
+        'clazz': 'xgboost.XGBClassifier',
+        'hyper_parameters': {},
+        'method': 'predict',
+    },
+    {
+        'clazz': 'sklearn.svm.SVC',
+        'hyper_parameters': {
+            'gamma': 2,
+            'C': 1,
+        },
+        'method': 'predict',
+    },
+    {
+        'clazz': 'lightgbm.LGBMClassifier',
+        'hyper_parameters': {},
+        'method': 'predict',
+    },
+    {
+        'clazz':  'sklearn.tree.DecisionTreeClassifier',
+        'hyper_parameters': {
+            'max_depth': 5,
+        },
+        'method': 'predict',
+    },
+    {
+        'clazz': 'sklearn.ensemble.RandomForestClassifier',
+        'hyper_parameters': {
+            'max_depth':5,
+            'n_estimators': 10, 
+            'max_features':1,
+        },
+        'method': 'predict',
+    },
+    {
+        'clazz': 'sklearn.ensemble.AdaBoostClassifier',
+        'hyper_parameters': {},
+        'method': 'predict',
+    },
+]
+
+NUMERIC_IMPUTATIONS  = [
+    {
+        'clazz': 'sklearn.impute.SimpleImputer',
+        'hyper_parameters': {},
+        'method': 'transform',
+    },
+    {
+        'clazz': 'sklearn.impute.KNNImputer',
+        'hyper_parameters': {
+            'n_neighbours': 2,
+        },
+        'method': 'transform',
+    }
+]
+
+CATEGORICAL_ENCODERS = [
+    {
+        'clazz': 'sklearn.preprocessing.OrdinalEncoder',
+        'hyper_parameters': {},
+        'method': 'transform',
+    },
+    {
+        'clazz': 'sklearn.preprocessing.OneHotEncoder',
+        'hyper_parameters': {
+            'handle_unknown': 'ignore',
+        },
+        'method': 'transform',
+    },
+]
+
+
+class ModelGenerator(object):
+
+    def generate(self, features_meta_info: FeaturesMetainfo, model_type: ModelType) -> List[ModelMetaInfo]:
+        return self.permutations(features_meta_info, model_type)
+    
+    def permutations(self, features_meta_info: FeaturesMetainfo, model_type: ModelType) -> List[ModelMetaInfo]:
+        preprocessing_steps = []
+        estimators = None
+        if model_type in [ModelType.BINARY, ModelType.MULTICLASS]:
+            estimators = CLASSIFICATION_ESTIMATORS
+        types_count = features_meta_info.types_count
+        types = []
+        if FeatureType.NUMERIC in types_count:
+            preprocessing_steps.append(NUMERIC_IMPUTATIONS)
+            types.append(FeatureType.NUMERIC)
+        if FeatureType.CATEGORICAL in types_count:
+            preprocessing_steps.append(CATEGORICAL_ENCODERS)
+            types.append(FeatureType.CATEGORICAL)
+        vertices_count = len(preprocessing_steps) + 1
+        preprocessing_combs = []
+        self.preprocessing_combs_recursive(preprocessing_steps, 0, [], preprocessing_combs)
+        result = []
+        for est_dict in estimators:
+            parents = [str(i) for i in range(len(preprocessing_steps))]
+            est_dict = dict(est_dict)
+            est_dict['name'] = 'Vertex_{}'.format(len(preprocessing_steps))
+            est_dict['uid'] = '{}'.format(len(preprocessing_steps))
+            est_vertex = VertexMetaInfo.from_dict(est_dict)
+            for preprocessing_comb in preprocessing_combs:
+                model = ModelMetaInfo()
+                for i in range(len(preprocessing_comb)):
+                    sources = [types[i]]
+                    task_index = preprocessing_comb[i]
+                    prep_dict = dict(preprocessing_steps[i][task_index])
+                    prep_dict['name'] = 'Vertex_{}'.format(i)
+                    prep_dict['uid'] = str(i)
+                    model.add(VertexMetaInfo.from_dict(prep_dict), feature_selection=sources)
+                model.add(est_vertex, parents_uids=parents)
+                result.append(model)
+        return result
+
+    def preprocessing_combs_recursive(self, steps: List[List[dict]], current: int, path: List[int], results: List[List[int]]):
+        if current == len(steps):
+            results.append(list(path))
+            return
+        for i in range(len(steps[current])):
+            path.append(i)
+            self.preprocessing_combs_recursive(steps, current + 1, path, results)
+            del path[-1]
 
 
 def train(training_data_path: str, target_name: str, random_state: Optional[int] = None):
+    model_generator = ModelGenerator()
     reader = DataSetReader()
     dataset = reader.read(training_data_path)
-    X_train, X_test, y_train, y_test = dataset.sample(target_name, random_state=0)
-    class_labels = None
-    if dataset.get_feature_type(target_name) == FeatureType.CATEGORICAL:
-        le = preprocessing.LabelEncoder()
-        y_train = le.fit_transform(y_train)
-        le = preprocessing.LabelEncoder()
-        y_test = le.fit_transform(y_test)
-        class_labels = le.classes_
-    models = get_models(dataset, class_labels=class_labels, random_state=random_state)
-    for model in models:
-        model.fit(X_train, y_train)
-    best_model = None
-    best_metric = 0
-    for model in models:
-        preds = model.predict(X_test)
-        metric = metrics.accuracy_score(preds, y_test)
-        if metric >= best_metric:
-            best_model = model
-            best_metric = metric
-    return best_model
+    features_info = dataset.metainfo.subset([target_name], include=False)
+    model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
+    models_infos = model_generator.generate(features_info, model_type)
+    results = []
+    for model_meta_info in models_infos:
+        model, metric = train_single(dataset, target_name, model_meta_info, random_state)
+        results.append((model, metric))
+    results = sorted(results, key=lambda x: x[1], reverse=True)
+    return results
 
 
-def train_single(training_data_path: str, target_name: str, model_meta_info: ModelMetaInfo, random_state: Optional[int] = None):
-    reader = DataSetReader()
-    dataset = reader.read(training_data_path)
+def train_single(dataset: InmemoryDataSet, target_name: str, model_meta_info: ModelMetaInfo, random_state: Optional[int] = None):
     model = Model(model_meta_info, dataset.metainfo, target_name)
     X_train, X_test, y_train, y_test = dataset.sample(target_name, random_state=0)
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, random_state=random_state)
     preds = model.predict(X_test)
     metric = metrics.accuracy_score(preds, y_test)
     return model, metric
-
-
-def get_models(dataset: InmemoryDataSet, class_labels: Optional[np.ndarray] = None, random_state: Optional[int] = None):
-    if class_labels is None:
-        # regression todo
-        return []
-    return [
-        XGBClassifier(),
-        lgb.LGBMClassifier(num_class=len(class_labels), random_state=random_state),
-        linear_model.SGDClassifier(random_state=random_state),
-    ]
 
 
 if __name__ == '__main__':
