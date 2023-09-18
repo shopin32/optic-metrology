@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn import linear_model
+from optic_metrology.feature_impact import compute_feature_impact
 from optic_metrology.meta_info import ModelMetaInfo
 from optic_metrology.reader import DataSetReader
 from tests.utils import get_test_file
@@ -10,9 +11,11 @@ def test_train_with_model_generation():
     # arrange
     dataset_path = get_test_file('iris_fisher.xlsx')
     target_name = 'Вид ірису'
+    reader = DataSetReader()
+    dataset = reader.read(dataset_path)
 
     # Act
-    models = train(dataset_path, target_name, random_state=123422)
+    models = train(dataset, target_name, random_state=123422)
 
     # Assert
     assert models is not None
@@ -24,9 +27,11 @@ def test_readmitted():
     # arrange
     dataset_path = get_test_file('diabetes.csv')
     target_name = 'readmitted'
+    reader = DataSetReader()
+    dataset = reader.read(dataset_path)
 
     # Act
-    models = train(dataset_path, target_name, random_state=123422)
+    models = train(dataset, target_name, random_state=123422)
 
     # Assert
     assert models is not None
@@ -73,6 +78,7 @@ def test_train_single_model():
     dataset = reader.read(dataset_path)
     model, _ = train_single(dataset, target_name, model, 123)
     result = model.predict(dataset.get_df(), show_probs=True)
+    compute_feature_impact(dataset, model)
 
     # Assert
     assert result.shape[1] == 3

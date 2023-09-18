@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from typing import Iterable, List, Optional
@@ -114,7 +115,6 @@ class ModelGenerator(object):
         if FeatureType.CATEGORICAL in types_count:
             preprocessing_steps.append(CATEGORICAL_ENCODERS)
             types.append(FeatureType.CATEGORICAL)
-        vertices_count = len(preprocessing_steps) + 1
         preprocessing_combs = []
         self.preprocessing_combs_recursive(preprocessing_steps, 0, [], preprocessing_combs)
         result = []
@@ -147,10 +147,8 @@ class ModelGenerator(object):
             del path[-1]
 
 
-def train(training_data_path: str, target_name: str, random_state: Optional[int] = None):
+def train(dataset: InmemoryDataSet, target_name: str, random_state: Optional[int] = None):
     model_generator = ModelGenerator()
-    reader = DataSetReader()
-    dataset = reader.read(training_data_path)
     features_info = dataset.metainfo.subset([target_name], include=False)
     model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
     models_infos = model_generator.generate(features_info, model_type)
@@ -172,10 +170,15 @@ def train_single(dataset: InmemoryDataSet, target_name: str, model_meta_info: Mo
     metric = metrics.accuracy_score(preds, y_test)
     return model, metric
 
-
-if __name__ == '__main__':
-    models = train('/home/petro/Downloads/iris_fisher.xlsx', 'Вид ірису', random_state=123422)
-    for model, metric in models:
-        print(model)
-        print(metric)
-
+def train_predefined(dataset: InmemoryDataSet, target_name: str, json_path: str, random_state: Optional[int] = None):
+    models_infos = []
+    for model_dict in json.load(open(json_path)):
+        models_infos.append(ModelMetaInfo.from_dict(model_dict))
+    LOGGER.info("Models to train: [%s]", len(models_infos))
+    results = []
+    for model_meta_info in models_infos:
+        model, metric = train_single(dataset, target_name, model_meta_info, random_state)
+        results.append((model, metric))
+        LOGGER.info("Progress: %s/%s",len(results), len(models_infos))
+    results = sorted(results, key=lambda x: x[1], reverse=True)
+    return results

@@ -25,6 +25,14 @@ class Model(object):
     @property
     def class_names(self) -> List[str]:
         return self._le.classes_
+    
+    @property
+    def target_name(self) -> str:
+        return self._target_name
+    
+    @property
+    def features(self) -> List[str]:
+        return self._features
 
     
     def fit(self, X: pd.DataFrame, y: pd.DataFrame, **kwargs):
@@ -71,6 +79,24 @@ class Model(object):
             return pd.DataFrame(data=result, columns=self.class_names)
         return pd.DataFrame({'{}_Prediction'.format(self._target_name): result}, index=X.index)
     
+    def score(self, X: pd.DataFrame, y: pd.DataFrame, **kwargs) -> float:
+        X = X[self._features]
+        vertices = self._model_meta_info.vertices
+        y = self._encode_labels(y)
+        data = {}
+        for i in range(len(vertices)):
+            vertex = vertices[i]
+            vertex_instance = self._trained_vertices[vertex.uid]
+            vertex_input = self._initialize_vertex_input(X, data, vertex)
+            method_name = vertex.method
+            args = [vertex_input]
+            if i == len(vertices) - 1:
+                method_name = 'score'
+                args += [y]
+            vertex_output = getattr(vertex_instance, method_name)(*args)
+            data[vertex.uid] = vertex_output
+        return vertex_output
+    
     def _fit_label_encoder(self, y: pd.DataFrame):
         self._le.fit(y)
     
@@ -99,7 +125,11 @@ class Model(object):
         if np.any(is_sparse):
             return hstack([data[p] for p in parents])
         return np.hstack([data[p] for p in parents])
-
+    
     def __repr__(self) -> str:
+        vertices = self._model_meta_info.vertices
+        return '{' + ','.join(['"{}": {}.{}({})'.format(v.uid, v.clazz.split('.')[-1], v.method, v.parent_uids if v.parents else self._model_meta_info.get_source(v.uid)) for v in vertices]) + '}'
+
+    def __str__(self) -> str:
         return json.dumps(self._model_meta_info.to_dict(), indent=4)
         

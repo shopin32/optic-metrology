@@ -1,0 +1,30 @@
+[
+    {
+        "vertices": [
+            {
+                "uid": "0",
+                "name": "NumericMissingValuesHandler",
+                "clazz": "sklearn.impute.SimpleImputer",
+                "method": "transform",
+                "parents": [],
+                "hyper_parameters": {
+                    "strategy": "mean"
+                }
+            },
+            {
+                "uid": "1",
+                "parents": ["0"],
+                "name": "etimator",
+                "clazz": "xgboost.XGBClassifier",
+                "method": "predict",
+                "hyper_parameters": {
+                    "use_label_encoder": false, 
+                    "eval_metric": "mlogloss"
+                }
+            }
+        ],
+        "sources": {
+            "0": ["NUMERIC"]
+        }
+    }
+]
