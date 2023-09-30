@@ -78,7 +78,7 @@ def test_train_single_model():
     dataset = reader.read(dataset_path)
     model, _ = train_single(dataset, target_name, model, 123)
     result = model.predict(dataset.get_df(), show_probs=True)
-    compute_feature_impact(dataset, model)
+    feature_impact = compute_feature_impact(dataset, model)
 
     # Assert
     assert result.shape[1] == 3
