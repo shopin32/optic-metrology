@@ -11,7 +11,7 @@ def run(train_dataset_path: str, target_name: str, json_path: Optional[str], ran
     reader = DataSetReader()
     dataset = reader.read(train_dataset_path)
     if json_path:
-        models = train_predefined(dataset, target_name, json_path, random_state=random_state)
+        models = train_predefined(dataset, target_name, json.load(open(json_path)), random_state=random_state)
     else:
         models = train(dataset, target_name, random_state=random_state)
     

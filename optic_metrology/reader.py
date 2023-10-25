@@ -6,23 +6,32 @@ import chardet
 from sklearn.model_selection import train_test_split
 
 from optic_metrology.feature import FeatureType, FeaturesMetainfo
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 
 class InmemoryDataSet(object):
 
     def __init__(
             self,
-            file_path: str,
-            extension: str,
             df: pd.DataFrame,
-            metainfo: FeaturesMetainfo,
             encoding: Optional[str] = None,
+            file_path: Optional[str] = None,
+            extension: Optional[str] = None,
     ):
         self._extension = extension
         self._file_path = file_path
         self._df = df
-        self._metainfo = metainfo
         self._encoding = encoding
+        self._metainfo = FeaturesMetainfo()
+        for col in df.columns:
+            if np.issubdtype(df.dtypes[col], np.number):
+                ftype = FeatureType.NUMERIC
+            elif is_datetime(df[col]):
+                ftype = FeatureType.DATE
+            else:
+                ftype = FeatureType.CATEGORICAL
+                df[col] = df[col].fillna('')
+            self._metainfo.add(col, ftype)
     
     def get_df(self) -> pd.DataFrame:
         return self._df
@@ -87,7 +96,6 @@ class   DataSetReader(object):
         dataset_path: str,
         encoding: Optional[str] = None,
         detect_encoding: bool = False,
-        datetime_column: Optional[str] = None,
     ) -> InmemoryDataSet:
         extension = os.path.splitext(dataset_path)[1]
         if extension == '.xlsx':
@@ -96,16 +104,8 @@ class   DataSetReader(object):
             if not encoding and detect_encoding:
                 encoding = self._detect_encoding(dataset_path)
             df = pd.read_csv(dataset_path)
-        metainfo = FeaturesMetainfo()
-        for col in df.columns:
-            if np.issubdtype(df.dtypes[col], np.number):
-                ftype = FeatureType.NUMERIC
-            else:
-                ftype = FeatureType.CATEGORICAL
-                df[col] = df[col].fillna('')
-            metainfo.add(col, ftype)
         return InmemoryDataSet(
-            dataset_path, extension, df, metainfo, encoding=encoding
+            df, encoding=encoding, dataset_path=dataset_path, extension=extension, 
         )
     
     def _detect_encoding(self, dataset_path: str) -> str:

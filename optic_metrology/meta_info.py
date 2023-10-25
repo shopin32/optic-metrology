@@ -10,7 +10,9 @@ class ModelType(Enum):
     REGRESSION = 1
     BINARY = 2
     MULTICLASS = 3
-    MULTILABEL = 4
+    ANOMALY_DETECTION = 4
+    ANOMALY_CLUSTERING = 5
+    MULTILABEL = 6
 
 class VertexMetaInfo(object):
     def __init__(

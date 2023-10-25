@@ -5,21 +5,24 @@ import pandas as pd
 from sklearn import preprocessing
 from scipy.sparse import issparse, hstack
 from optic_metrology.feature import FeatureType, FeaturesMetainfo
-from optic_metrology.meta_info import ModelMetaInfo, VertexMetaInfo
+from optic_metrology.meta_info import ModelMetaInfo, ModelType, VertexMetaInfo
 from optic_metrology.utils import get_class
 import inspect
+import cv2
 
 
 class Model(object):
 
-    def __init__(self, model_meta_info: ModelMetaInfo, features_meta_info: FeaturesMetainfo, target_name: str) -> None:
+    def __init__(self, model_meta_info: ModelMetaInfo, features_meta_info: FeaturesMetainfo, model_type: ModelType, target_name: str) -> None:
         self._model_meta_info = model_meta_info
+        self._model_type = model_type
         self._features_meta_info = features_meta_info
         self._trained_vertices = {}
         self._is_classification = features_meta_info[target_name][0] == FeatureType.CATEGORICAL
         self._le = preprocessing.LabelEncoder()
         self._features: Optional[List[str]] = None
         self._target_name = target_name
+        cv2.CAP_PROP_FRAME_COUNT
     
 
     @property

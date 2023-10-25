@@ -147,32 +147,35 @@ class ModelGenerator(object):
             del path[-1]
 
 
-def train(dataset: InmemoryDataSet, target_name: str, random_state: Optional[int] = None):
+def train(dataset: InmemoryDataSet, model_type: Optional[ModelType] = None, target_name: Optional[str] = None, random_state: Optional[int] = None):
     model_generator = ModelGenerator()
     features_info = dataset.metainfo.subset([target_name], include=False)
-    model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
+    if not model_type and target_name:
+        model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
+    elif not model_type:
+        model_type = ModelType.ANOMALY_DETECTION
     models_infos = model_generator.generate(features_info, model_type)
     LOGGER.info("Models to train: [%s]", len(models_infos))
     results = []
     for model_meta_info in models_infos:
-        model, metric = train_single(dataset, target_name, model_meta_info, random_state)
+        model, metric = train_single(dataset, model_meta_info, model_type, random_state=random_state, target_name=target_name)
         results.append((model, metric))
         LOGGER.info("Progress: %s/%s",len(results), len(models_infos))
     results = sorted(results, key=lambda x: x[1], reverse=True)
     return results
 
 
-def train_single(dataset: InmemoryDataSet, target_name: str, model_meta_info: ModelMetaInfo, random_state: Optional[int] = None):
-    model = Model(model_meta_info, dataset.metainfo, target_name)
+def train_single(dataset: InmemoryDataSet, model_meta_info: ModelMetaInfo, model_type: ModelType, target_name: Optional[str] = None, random_state: Optional[int] = None):
+    model = Model(model_meta_info, dataset.metainfo, model_type, target_name)
     X_train, X_test, y_train, y_test = dataset.sample(target_name, random_state=0)
     model.fit(X_train, y_train, random_state=random_state)
     preds = model.predict(X_test)
     metric = metrics.accuracy_score(preds, y_test)
     return model, metric
 
-def train_predefined(dataset: InmemoryDataSet, target_name: str, json_path: str, random_state: Optional[int] = None):
+def train_predefined(dataset: InmemoryDataSet, target_name: str, models_list: str, random_state: Optional[int] = None):
     models_infos = []
-    for model_dict in json.load(open(json_path)):
+    for model_dict in models_list:
         models_infos.append(ModelMetaInfo.from_dict(model_dict))
     LOGGER.info("Models to train: [%s]", len(models_infos))
     results = []
