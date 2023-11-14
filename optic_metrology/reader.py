@@ -87,6 +87,15 @@ class InmemoryDataSet(object):
     
     def get_column(self, name: str) -> pd.Series:
         return self._df[name]
+    
+    def add_fake_target(self):
+        target_name = 'fake_target'
+        updated_df = self._df.copy()
+        updated_df[target_name] = np.zeros(self._df.shape[0])
+        dataset = InmemoryDataSet(
+            updated_df, encoding=self._encoding, file_path=self._file_path, extension=self._extension
+        )
+        return dataset, target_name
         
         
 class   DataSetReader(object):
@@ -105,7 +114,7 @@ class   DataSetReader(object):
                 encoding = self._detect_encoding(dataset_path)
             df = pd.read_csv(dataset_path)
         return InmemoryDataSet(
-            df, encoding=encoding, dataset_path=dataset_path, extension=extension, 
+            df, encoding=encoding, file_path=dataset_path, extension=extension, 
         )
     
     def _detect_encoding(self, dataset_path: str) -> str:

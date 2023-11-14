@@ -13,12 +13,17 @@ import cv2
 
 class Model(object):
 
-    def __init__(self, model_meta_info: ModelMetaInfo, features_meta_info: FeaturesMetainfo, model_type: ModelType, target_name: str) -> None:
+    def __init__(
+        self, 
+        model_meta_info: ModelMetaInfo, 
+        features_meta_info: FeaturesMetainfo, 
+        model_type: ModelType, 
+        target_name: str
+    ) -> None:
         self._model_meta_info = model_meta_info
         self._model_type = model_type
         self._features_meta_info = features_meta_info
         self._trained_vertices = {}
-        self._is_classification = features_meta_info[target_name][0] == FeatureType.CATEGORICAL
         self._le = preprocessing.LabelEncoder()
         self._features: Optional[List[str]] = None
         self._target_name = target_name
@@ -36,15 +41,18 @@ class Model(object):
     @property
     def features(self) -> List[str]:
         return self._features
-
+    
+    @property
+    def is_classification(self):
+        return self._model_type == ModelType.MULTICLASS
     
     def fit(self, X: pd.DataFrame, y: pd.DataFrame, **kwargs):
-        if self._is_classification:
-            self._fit_label_encoder(y)
-            y = self._encode_labels(y)
         self._features = X.columns.tolist()
         extra_parameters = dict(kwargs)
-        extra_parameters['num_class'] = len(self.class_names)
+        if self.is_classification:
+            self._fit_label_encoder(y)
+            y = self._encode_labels(y)
+            extra_parameters['num_class'] = len(self.class_names)
         vertices = self._model_meta_info.vertices
         data = {}
         for vertex in vertices:
@@ -52,11 +60,14 @@ class Model(object):
             hyper_parameters.update(extra_parameters)
             vertex_clazz = get_class(vertex.clazz)
             result = inspect.getfullargspec(vertex_clazz.__init__)
-            hyper_parameters = {n: v for n, v in hyper_parameters.items() if n in result.kwonlyargs}
+            hyper_parameters = {n: v for n, v in hyper_parameters.items() if n in result.kwonlyargs + result.args}
             vertex_instance = vertex_clazz(**hyper_parameters)
             vertex_input = self._initialize_vertex_input(X, data, vertex)
-            vertex_instance.fit(vertex_input, y)
-            vertex_output = getattr(vertex_instance, vertex.method)(vertex_input)
+            if hasattr(vertex_instance, f'fit_{vertex.method}'):
+                vertex_output = getattr(vertex_instance, f'fit_{vertex.method}')(vertex_input, y)
+            else:
+                vertex_instance.fit(vertex_input, y)
+                vertex_output = getattr(vertex_instance, f'{vertex.method}')(vertex_input)
             self._trained_vertices[vertex.uid] = vertex_instance
             data[vertex.uid] = vertex_output
 
@@ -75,10 +86,10 @@ class Model(object):
             vertex_output = getattr(vertex_instance, method_name)(vertex_input)
             data[vertex.uid] = vertex_output
         result = vertex_output
-        if self._is_classification and not show_probs:
+        if self.is_classification and not show_probs:
             result = self._le.inverse_transform(vertex_output)
             return pd.DataFrame({'{}_Prediction'.format(self._target_name): result}, index=X.index)
-        if self._is_classification and show_probs:
+        if self.is_classification and show_probs:
             return pd.DataFrame(data=result, columns=self.class_names)
         return pd.DataFrame({'{}_Prediction'.format(self._target_name): result}, index=X.index)
     

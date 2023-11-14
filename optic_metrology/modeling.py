@@ -147,13 +147,26 @@ class ModelGenerator(object):
             del path[-1]
 
 
-def train(dataset: InmemoryDataSet, model_type: Optional[ModelType] = None, target_name: Optional[str] = None, random_state: Optional[int] = None):
+def detect_model_type(dataset: InmemoryDataSet, target_name: Optional[str] = None) -> ModelType:
+    if not target_name:
+        return ModelType.ANOMALY_DETECTION
+    target_type = dataset.get_feature_type(target_name)
+    if target_type == FeatureType.NUMERIC:
+        return ModelType.REGRESSION
+    return ModelType.MULTICLASS
+
+
+
+def train(
+    dataset: InmemoryDataSet, 
+    model_type: Optional[ModelType] = None, 
+    target_name: Optional[str] = None, 
+    random_state: Optional[int] = None
+):
     model_generator = ModelGenerator()
     features_info = dataset.metainfo.subset([target_name], include=False)
-    if not model_type and target_name:
-        model_type = ModelType.REGRESSION if dataset.get_feature_type(target_name) == FeatureType.NUMERIC else ModelType.MULTICLASS
-    elif not model_type:
-        model_type = ModelType.ANOMALY_DETECTION
+    if not model_type:
+        model_type = detect_model_type(dataset, target_name=target_name)
     models_infos = model_generator.generate(features_info, model_type)
     LOGGER.info("Models to train: [%s]", len(models_infos))
     results = []
@@ -165,7 +178,17 @@ def train(dataset: InmemoryDataSet, model_type: Optional[ModelType] = None, targ
     return results
 
 
-def train_single(dataset: InmemoryDataSet, model_meta_info: ModelMetaInfo, model_type: ModelType, target_name: Optional[str] = None, random_state: Optional[int] = None):
+def train_single(
+    dataset: InmemoryDataSet, 
+    model_meta_info: ModelMetaInfo, 
+    model_type: Optional[ModelType] = None, 
+    target_name: Optional[str] = None, 
+    random_state: Optional[int] = None
+):
+    if not model_type:
+        model_type = detect_model_type(dataset, target_name=target_name)
+    if model_type in [ModelType.UNSUPERVISED_CLUSTERING, ModelType.ANOMALY_DETECTION]:
+        dataset, target_name = dataset.add_fake_target()
     model = Model(model_meta_info, dataset.metainfo, model_type, target_name)
     X_train, X_test, y_train, y_test = dataset.sample(target_name, random_state=0)
     model.fit(X_train, y_train, random_state=random_state)
